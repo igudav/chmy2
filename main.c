@@ -3,6 +3,7 @@
 #include <math.h>
 #include <limits.h>
 #include <float.h>
+#include <assert.h>
 
 double h = 0.01;
 
@@ -117,21 +118,20 @@ double *tridiagMtrx(double **matrix, double *f, int n)
     return solution;
 }
 
-void double_runge_kutt(FILE *out, double a, double b,double init,
-                       double(*f)(double x, double y))
+void rk2(FILE *out, double a, double b,double y0, double(*f)(double x, double y))
 {
-    double y = init;
+    double y = y0;
     for (double x = a; x <= b; x += h){
         fprintf(out, "%f ", y);
         y = y + h * (f(x, y) + f(x + h, y + f(x, y) * h)) / 2;
     }
+    fprintf(out, "\n");
 }
 
 
-void square_runge_kutt(FILE *out, double a, double b, double init,
-                       double(*f)(double x, double y))
+void rk4(FILE *out, double a, double b, double y0, double(*f)(double x, double y))
 {
-    double y = init;
+    double y = y0;
     for (double x = a; x <= b; x += h){
         fprintf(out, "%f ", y);
         double k1 = f(x, y);
@@ -140,13 +140,14 @@ void square_runge_kutt(FILE *out, double a, double b, double init,
         double k4 = f(x + h, y + h * k3);
         y = y + h * (k1 + 2 * k2 + 2 * k3 + k4) / 6;
     }
+    fprintf(out, "\n");
 }
 
-void double_runge_kutt_system(FILE *out1, FILE *out2, double a, double b,  double init1,  double init2,
-                              double(*f1)(double x, double y1, double y2), double(*f2)(double x, double y1, double y2))
+void rk2sys(FILE *out1, FILE *out2, double a, double b, double y0_1,  double y0_2,
+        double(*f1)(double x, double y1, double y2), double(*f2)(double x, double y1, double y2))
 {
-    double y1 = init1;
-    double y2 = init2;
+    double y1 = y0_1;
+    double y2 = y0_2;
     for (double x = a; x <= b; x += h){
         fprintf(out1, "%f ", y1);
         fprintf(out2, "%f ", y2);
@@ -158,13 +159,15 @@ void double_runge_kutt_system(FILE *out1, FILE *out2, double a, double b,  doubl
         y1 = y1 + h * k2;
         y2 = y2 + h * k22;
     }
+    fprintf(out1, "\n");
+    fprintf(out2, "\n");
 }
 
-void square_runge_kutt_system(FILE *out1, FILE *out2, double a, double b,  double init1,  double init2,
-                              double(*f1)(double x, double y1, double y2), double(*f2)(double x, double y1, double y2))
+void rk4sys(FILE *out1, FILE *out2, double a, double b, double y0_1, double y0_2,
+        double(*f1)(double x, double y1, double y2), double(*f2)(double x, double y1, double y2))
 {
-    double y1 = init1;
-    double y2 = init2;
+    double y1 = y0_1;
+    double y2 = y0_2;
     for (double x = a; x <= b; x += h){
         fprintf(out1, "%f ", y1);
         fprintf(out2, "%f ", y2);
@@ -183,21 +186,76 @@ void square_runge_kutt_system(FILE *out1, FILE *out2, double a, double b,  doubl
         y1 = y1 + h * (k1 + 2 * k2 + 2 * k3 + k4) / 6;
         y2 = y2 + h * (k21 + 2 * k22 + 2 * k23 + k24) / 6;
     }
+    fprintf(out1, "\n");
+    fprintf(out2, "\n");
+}
+
+// a_0*y(a) + b_0*y'(a) = c_0
+// a_1*y(b) + b_1*y'(b) = c_1
+// y" + y'*p(x) + y*q(x) = -f(x)
+void bound_prob(FILE *out, double a_0, double b_0, double c_0, double a_1, double b_1, double c_1,
+        double (*p)(double), double (*q)(double), double (*f)(double), double a, double b)
+{
+    size_t sz = (b - a) / h;
+    assert(sz > 1);
+    double **matrix = getMtrx(sz);
+    double *vec = calloc(sz, sizeof(*f));
+
+    matrix[0][0] = a_0 * h - b_0;
+    matrix[0][1] = b_0;
+    vec[0] = c_0 * h;
+    matrix[sz - 1][sz - 2] = a_1 * h - b_1;
+    matrix[sz - 1][sz - 1] = b_1;
+    vec[sz - 1] = c_1 * h;
+
+    for (int i = 1; i < sz - 1; ++i) {
+        matrix[i][i - 1] = 2 - h * p(a + i * h);
+        matrix[i][i] = -4 + 2 * h * h * q(a + i * h);
+        matrix[i][i + 1] = 2 + h * p(a + i * h);
+        vec[i] = -2 * h * h * f(a + i * h);
+    }
+
+    double *sol = tridiagMtrx(matrix, vec, sz);
+
+    for (int i = 0; i < sz; ++i) {
+        fprintf(out, "%lf ", sol[i]);
+    }
+    fprintf(out, "\n");
+
+    delMtrx(matrix, sz);
+    free(vec);
+    free(sol);
+}
+
+double const5(double x)
+{
+    return -5.0;
+}
+
+double const4(double x)
+{
+    return 4.0;
+}
+
+double const8(double x)
+{
+    return -8.0;
 }
 
 int main(int argc, char *argv[])
 {
-    int n;
-    scanf("%d", &n);
-    double **matrix = getMtrx(n);
-    double *f = calloc(n, sizeof(*f));
-    scanMtrx(matrix, n);
-    scanVect(f, n);
 
-    double *sol = tridiagMtrx(matrix, f, n);
-    printVect(sol, n);
+    FILE *out = fopen("test2", "a");
 
-    free(sol);
+    bound_prob(out, 1, 0, 1, 1, 0, 7, const5, const4, const8, 0.0, log(2));
+
+    freopen("test2", "a", out);
+
+    for (int i = 0; i < 100; ++i) {
+        fprintf(out, "%lf ", 2 - 1.5 * exp(i * h) + 0.5 * exp(4 * i * h));
+    }
+
+    fprintf(out, "\n");
 
     return 0;
 }
