@@ -206,14 +206,8 @@ void rk4sys(FILE *out1, FILE *out2, double a, double b, double y0_1, double y0_2
 void bound_prob(FILE *out, double a_0, double b_0, double c_0, double a_1, double b_1, double c_1,
         double (*p)(double), double (*q)(double), double (*f)(double), double a, double b)
 {
-    int sz = (b - a) / h + 1;
+    int sz = round((b - a) / h) + 1;
     assert(sz > 1);
-
-    FILE *fx = fopen("x.txt", "w");
-    for (int i = 0; i < sz; ++i) {
-        fprintf(fx, "%lf ", a + i * h);
-    }
-    fprintf(fx, "\n");
 
     double **matrix = getMtrx(sz);
     double *vec = calloc(sz, sizeof(*vec));
@@ -234,10 +228,10 @@ void bound_prob(FILE *out, double a_0, double b_0, double c_0, double a_1, doubl
 
     double *sol = tridiagMtrx(matrix, vec, sz);
 
+    fprintf(out, "X;Y\n");
     for (int i = 0; i < sz; ++i) {
-        fprintf(out, "%lf ", sol[i]);
+        fprintf(out, "%lf;%lf\n", a + i * h, sol[i]);
     }
-    fprintf(out, "\n");
 
     delMtrx(matrix, sz);
     free(vec);
@@ -254,7 +248,7 @@ double func_f(double x) {return -3.0;}
 int main(int argc, char *argv[])
 {
 
-    FILE *out = fopen("test1", "w");
+    FILE *out = fopen("../../../Документы/ЧМЫ_02/test1.csv", "w");
 
     bound_prob(out, 1, 0, 2, 0.5, -1, 1, func_p, func_q, func_f, 0.2, 0.5);
 
